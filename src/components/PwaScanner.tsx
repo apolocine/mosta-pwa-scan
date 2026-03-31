@@ -19,7 +19,7 @@ export interface PwaScannerProps extends Partial<PwaScanConfig> {
 /**
  * Self-contained PWA QR Scanner.
  * If no serverUrl is provided, shows a config form to enter it.
- * Stores config in localStorage for persistence.
+ * Supports: NET mode, custom endpoint, turnstile, apiKey auth, bodyMapper, responseMapper.
  */
 export default function PwaScanner({ serverUrl: initialUrl, renderResult, onResult, ...rest }: PwaScannerProps) {
   const [config, setConfig] = useState<PwaScanConfig>({
@@ -38,17 +38,18 @@ export default function PwaScanner({ serverUrl: initialUrl, renderResult, onResu
 
   const { scanning, result, processing, startScanner, stopScanner, resetResult, scanManual } = usePwaScan(config)
 
-  // Load config from localStorage
+  // Load config from localStorage (only UI-editable fields, not callbacks)
   useEffect(() => {
     const saved = localStorage.getItem('mostajs-pwa-scan-config')
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        setConfig(prev => ({ ...prev, ...parsed }))
+        // Merge saved UI fields, keep programmatic props (bodyMapper, responseMapper, etc.)
+        setConfig(prev => ({ ...prev, ...parsed, ...rest }))
         setConfigured(true)
       } catch {}
     }
-    if (initialUrl) setConfigured(true)
+    if (initialUrl || rest.scanEndpoint) setConfigured(true)
 
     // Load history
     const savedHistory = localStorage.getItem('mostajs-pwa-scan-history')
@@ -58,10 +59,17 @@ export default function PwaScanner({ serverUrl: initialUrl, renderResult, onResu
     const params = new URLSearchParams(window.location.search)
     const urlParam = params.get('url')
     const tokenParam = params.get('token')
+    const apiKeyParam = params.get('apiKey')
     if (urlParam) {
-      const autoConfig = { ...config, serverUrl: urlParam, ...(tokenParam ? { token: tokenParam } : {}) }
+      const autoConfig: PwaScanConfig = {
+        ...config, ...rest, serverUrl: urlParam,
+        ...(tokenParam ? { token: tokenParam } : {}),
+        ...(apiKeyParam ? { apiKey: apiKeyParam } : {}),
+      }
       setConfig(autoConfig)
-      localStorage.setItem('mostajs-pwa-scan-config', JSON.stringify(autoConfig))
+      localStorage.setItem('mostajs-pwa-scan-config', JSON.stringify({
+        serverUrl: urlParam, token: tokenParam, apiKey: apiKeyParam
+      }))
       setConfigured(true)
     }
   }, [])
@@ -86,7 +94,9 @@ export default function PwaScanner({ serverUrl: initialUrl, renderResult, onResu
   }
 
   function saveConfig() {
-    localStorage.setItem('mostajs-pwa-scan-config', JSON.stringify(config))
+    // Save only serializable UI fields (no functions)
+    const { bodyMapper, responseMapper, ...serializable } = config
+    localStorage.setItem('mostajs-pwa-scan-config', JSON.stringify(serializable))
     setConfigured(true)
     setTab('scan')
   }
@@ -104,28 +114,58 @@ export default function PwaScanner({ serverUrl: initialUrl, renderResult, onResu
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
             <div>
-              <label style={{ fontSize: 13, color: '#94a3b8', display: 'block', marginBottom: 4 }}>URL du serveur</label>
+              <label style={labelStyle}>URL du serveur</label>
               <input value={config.serverUrl} onChange={e => setConfig({ ...config, serverUrl: e.target.value })}
-                placeholder="http://localhost:4488" style={inputStyle} />
+                placeholder="http://localhost:4447" style={inputStyle} />
             </div>
             <div>
-              <label style={{ fontSize: 13, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Collection</label>
-              <input value={config.collection} onChange={e => setConfig({ ...config, collection: e.target.value })}
-                placeholder="reservations" style={inputStyle} />
+              <label style={labelStyle}>Endpoint scan (optionnel)</label>
+              <input value={config.scanEndpoint || ''} onChange={e => setConfig({ ...config, scanEndpoint: e.target.value || undefined })}
+                placeholder="/api/turnstiles/validate" style={inputStyle} />
             </div>
+
+            {/* NET mode fields — only shown when no scanEndpoint */}
+            {!config.scanEndpoint && (
+              <>
+                <div>
+                  <label style={labelStyle}>Collection</label>
+                  <input value={config.collection} onChange={e => setConfig({ ...config, collection: e.target.value })}
+                    placeholder="reservations" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Champ QR code</label>
+                  <input value={config.codeField} onChange={e => setConfig({ ...config, codeField: e.target.value })}
+                    placeholder="qrCode" style={inputStyle} />
+                </div>
+              </>
+            )}
+
+            {/* Auth */}
             <div>
-              <label style={{ fontSize: 13, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Champ QR code</label>
-              <input value={config.codeField} onChange={e => setConfig({ ...config, codeField: e.target.value })}
-                placeholder="qrCode" style={inputStyle} />
-            </div>
-            <div>
-              <label style={{ fontSize: 13, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Token (optionnel)</label>
-              <input value={config.token || ''} onChange={e => setConfig({ ...config, token: e.target.value })}
+              <label style={labelStyle}>Token Bearer (optionnel)</label>
+              <input value={config.token || ''} onChange={e => setConfig({ ...config, token: e.target.value || undefined })}
                 placeholder="Bearer token" type="password" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>API Key (optionnel)</label>
+              <input value={config.apiKey || ''} onChange={e => setConfig({ ...config, apiKey: e.target.value || undefined })}
+                placeholder="x-api-key" type="password" style={inputStyle} />
+            </div>
+
+            {/* Device identity */}
+            <div>
+              <label style={labelStyle}>Gate ID (optionnel)</label>
+              <input value={config.gateId || ''} onChange={e => setConfig({ ...config, gateId: e.target.value || undefined })}
+                placeholder="GATE-01" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Device ID (optionnel)</label>
+              <input value={config.deviceId || ''} onChange={e => setConfig({ ...config, deviceId: e.target.value || undefined })}
+                placeholder="scanner-01" style={inputStyle} />
             </div>
           </div>
 
-          <button onClick={handleTestConnection} disabled={testing || !config.serverUrl}
+          <button onClick={handleTestConnection} disabled={testing || (!config.serverUrl && !config.scanEndpoint)}
             style={{ width: '100%', padding: 12, backgroundColor: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 8 }}>
             {testing ? '⏳ Test...' : '🔌 Tester la connexion'}
           </button>
@@ -133,11 +173,11 @@ export default function PwaScanner({ serverUrl: initialUrl, renderResult, onResu
           {testResult && (
             <div style={{ padding: 10, borderRadius: 8, marginBottom: 8, fontSize: 13,
               backgroundColor: testResult.ok ? '#064e3b' : '#7f1d1d', color: testResult.ok ? '#6ee7b7' : '#fca5a5' }}>
-              {testResult.ok ? `✅ Connecté — ${testResult.entities?.length || 0} entités` : `❌ ${testResult.error}`}
+              {testResult.ok ? `✅ Connecté` : `❌ ${testResult.error}`}
             </div>
           )}
 
-          <button onClick={saveConfig} disabled={!config.serverUrl}
+          <button onClick={saveConfig} disabled={!config.serverUrl && !config.scanEndpoint}
             style={{ width: '100%', padding: 12, backgroundColor: '#22c55e', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
             ✓ Sauvegarder
           </button>
@@ -218,7 +258,7 @@ export default function PwaScanner({ serverUrl: initialUrl, renderResult, onResu
                   <div>
                     <span style={{ fontSize: 16, marginRight: 8 }}>{h.status === 'granted' ? '✅' : '❌'}</span>
                     <span style={{ fontSize: 14 }}>{h.message}</span>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{h.code?.slice(0, 20)}...</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{h.code?.slice(0, 20)}{h.code?.length > 20 ? '...' : ''}</div>
                   </div>
                   <div style={{ fontSize: 11, color: '#64748b' }}>{h.timestamp?.slice(11, 19)}</div>
                 </div>
@@ -233,6 +273,10 @@ export default function PwaScanner({ serverUrl: initialUrl, renderResult, onResu
       )}
     </div>
   )
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 13, color: '#94a3b8', display: 'block', marginBottom: 4,
 }
 
 const inputStyle: React.CSSProperties = {

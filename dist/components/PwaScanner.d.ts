@@ -10,6 +10,6 @@ export interface PwaScannerProps extends Partial<PwaScanConfig> {
 /**
  * Self-contained PWA QR Scanner.
  * If no serverUrl is provided, shows a config form to enter it.
- * Stores config in localStorage for persistence.
+ * Supports: NET mode, custom endpoint, turnstile, apiKey auth, bodyMapper, responseMapper.
  */
 export default function PwaScanner({ serverUrl: initialUrl, renderResult, onResult, ...rest }: PwaScannerProps): import("react/jsx-runtime").JSX.Element;
