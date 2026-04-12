@@ -3,7 +3,7 @@
   "version": "1.1.0",
   "description": "PWA QR Scanner — installable scanner for @mostajs apps (QR code + face recognition)",
   "author": "Dr Hamid MADANI <drmdh@msn.com>",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -39,7 +39,9 @@
     "react": ">=18.0.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true }
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
@@ -50,5 +52,12 @@
     "type": "git",
     "url": "https://github.com/apolocine/mosta-pwa-scan"
   },
-  "keywords": ["pwa", "qr-code", "scanner", "mostajs", "face-recognition", "ticketing"]
+  "keywords": [
+    "pwa",
+    "qr-code",
+    "scanner",
+    "mostajs",
+    "face-recognition",
+    "ticketing"
+  ]
 }
