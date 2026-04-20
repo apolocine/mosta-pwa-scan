@@ -283,4 +283,4 @@ export type { ScannerConfig, ScanResult, PwaScanConfig, PwaScannerProps } from '
 
 ## License
 
-MIT — © 2026 Dr Hamid MADANI <drmdh@msn.com>
+GNU AFFERO GENERAL PUBLIC LICENSE — © 2026 Dr Hamid MADANI <drmdh@msn.com>
