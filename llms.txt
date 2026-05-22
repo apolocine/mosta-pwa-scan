@@ -1,0 +1,96 @@
+# @mostajs/pwa-scan — fiche LLM
+> Scanner QR sous forme de PWA installable pour les apps @mostajs (code QR + reconnaissance faciale).
+
+- Version: 1.1.1 · Licence: AGPL-3.0-or-later · Auteur: Dr Hamid MADANI <drmdh@msn.com>
+- Chemin: mostajs/mosta-pwa-scan · Statut audit: complet (dist/)
+
+## RÔLE
+Scanner QR autonome conçu comme application web progressive (PWA) installable :
+contrôle d'accès / billetterie sur terminal mobile. À la différence de @mostajs/scan
+(composants intégrables dans une app existante), ce module est un scanner complet et
+auto-suffisant, avec formulaire de configuration intégré, trois modes de validation
+serveur (NET, endpoint custom, tourniquet/turnstile) et option de reconnaissance faciale.
+
+## INSTALLATION
+npm i @mostajs/pwa-scan
+
+## EXPORTS
+- PwaScanner — composant React (scanner PWA complet, export default ré-exporté nommé)
+- usePwaScan(config) : hook — pilote le cycle de vie du scan
+- validateScan(code, config) : function — valide un code QR auprès du serveur
+- testConnection(config) : function — teste la connectivité au serveur
+- playBeep(freq, duration), playGranted(freq?), playDenied(freq?) : retour audio
+- Types : PwaScannerProps, UsePwaScanReturn, ScannerConfig, ScanResult, PwaScanConfig
+
+## EXPORTS PAR SOUS-CHEMIN
+- "." → PwaScanner, usePwaScan, validateScan, testConnection, audio, types
+- "./components/*" → composants individuels (ex: ./components/PwaScanner)
+- "./hooks/*" → hooks individuels (ex: ./hooks/usePwaScan)
+- "./manifest" → public/manifest.json (manifeste PWA prêt à servir)
+
+## API — SIGNATURES
+- function PwaScanner(props: PwaScannerProps): JSX.Element
+- function usePwaScan(config: PwaScanConfig): UsePwaScanReturn
+- function validateScan(code: string, config: ScannerConfig): Promise<ScanResult>
+- function testConnection(config: ScannerConfig): Promise<{ ok: boolean; entities?: string[]; error?: string }>
+- function playBeep(freq: number, duration: number): void
+- function playGranted(freq?: number): void
+- function playDenied(freq?: number): void
+
+## TYPES CLÉS
+- ScannerConfig {
+    serverUrl: string;            // vide possible = same-origin
+    scanEndpoint?: string;        // POST custom (remplace le mode NET)
+    collection?='reservations';   // mode NET seulement
+    codeField?='qrCode';          // mode NET seulement
+    token?: string;               // → Authorization: Bearer
+    apiKey?: string;              // → x-api-key
+    deviceId?; gateId?; userAgent?: string;
+    headers?: Record<string,string>;
+    bodyMapper?: (code, config) => object;          // défaut: { code, action: 'lookup' }
+    responseMapper?: (json, code) => ScanResult;    // auto-détecte {status} vs {valid}
+    appName?='MostaJS Scanner';
+  }
+- ScanResult { status: 'granted'|'denied'|'error'; message: string; data?: Record<string,unknown>; code?: string }
+- PwaScanConfig extends ScannerConfig { faceEnabled?: boolean; grantedFreq?=800; deniedFreq?=300 }
+- PwaScannerProps extends Partial<PwaScanConfig> { renderResult?: (r: ScanResult) => ReactNode; onResult?: (r: ScanResult) => void }
+- UsePwaScanReturn { scanning; processing: boolean; result: ScanResult|null;
+    startScanner(): Promise<void>; stopScanner(): Promise<void>; resetResult(): void; scanManual(code: string): Promise<void> }
+
+## PATTERN
+```tsx
+import { PwaScanner } from '@mostajs/pwa-scan';
+
+// Si serverUrl n'est pas fourni, le composant affiche d'abord un formulaire de config
+<PwaScanner
+  serverUrl="https://api.example.com"
+  apiKey={process.env.NEXT_PUBLIC_SCAN_KEY}
+  gateId="GATE-01"
+  onResult={(r) => console.log(r.status, r.message)}
+/>
+```
+Validation directe : `await validateScan(code, { serverUrl, scanEndpoint, apiKey })`.
+
+## MODES DE VALIDATION (validateScan / scan-api)
+1. `scanEndpoint` + `bodyMapper` → POST custom (tourniquet, backend quelconque)
+2. `scanEndpoint` sans `bodyMapper` → POST { code, action: 'lookup' }
+3. Pas de `scanEndpoint` → GET /api/v1/{collection} (mode NET)
+
+## DÉPEND DE
+- Aucun module @mostajs/* requis. Dépendance directe : html5-qrcode.
+- Peer optionnel : react (>=18).
+
+## PIÈGES
+- Sans `serverUrl`, `PwaScanner` n'échoue pas : il affiche un formulaire de configuration
+  pour saisir l'URL avant de scanner.
+- Le mode est déterminé implicitement par la présence/absence de `scanEndpoint` et
+  `bodyMapper` (voir section MODES) — bien choisir pour éviter un appel à la mauvaise route.
+- `responseMapper` auto-détecte les formats `{status}` et `{valid}` ; pour un format serveur
+  exotique, fournir un `responseMapper` explicite.
+- `faceEnabled` active la reconnaissance faciale (mode PwaScanConfig uniquement).
+- Pour l'installabilité PWA, servir le manifeste via le sous-chemin `./manifest`.
+
+## RÉFÉRENCES
+- README.md
+- CHANGELOG.md : absent
+- src/, public/manifest.json, "Tout est en place.md"

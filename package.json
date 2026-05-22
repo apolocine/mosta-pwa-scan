@@ -26,7 +26,8 @@
   "files": [
     "dist",
     "public",
-    "README.md"
+    "README.md",
+    "llms.txt"
   ],
   "scripts": {
     "build": "tsc",
